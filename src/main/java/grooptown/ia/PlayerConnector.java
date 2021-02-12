@@ -1,24 +1,26 @@
 package grooptown.ia;
 
-import grooptown.ia.model.AvailableMoves;
-import grooptown.ia.model.Game;
-import grooptown.ia.model.GameState;
-import grooptown.ia.model.Player;
+import com.fasterxml.jackson.databind.JsonNode;
+import grooptown.ia.model.MoveRequest;
+import grooptown.ia.model.PayerSecret;
+import grooptown.ia.model.PlayerRegistration;
 import lombok.Data;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Arrays;
+import java.util.UUID;
 
 @Data
 public class PlayerConnector {
 
     private String gameId;
 
-    public Player player;
+    public PayerSecret player;
 
-    public static String baseUrl = "https://domi-nation.grooptown.com";
+    public static String baseUrl = "http://mrjack.grooptown.com";
+    // public static String baseUrl = "http://127.0.0.1:9000";
 
     private static RestTemplate restTemplate = getRestTemplate();
 
@@ -33,31 +35,44 @@ public class PlayerConnector {
     private static RestTemplate getRestTemplate() {
         RestTemplate restTemplate = new RestTemplate();
         MappingJackson2HttpMessageConverter mappingJackson2HttpMessageConverter = new MappingJackson2HttpMessageConverter();
-        mappingJackson2HttpMessageConverter.setSupportedMediaTypes(Arrays.asList(MediaType.APPLICATION_JSON, MediaType.APPLICATION_OCTET_STREAM));
+        mappingJackson2HttpMessageConverter
+                .setSupportedMediaTypes(Arrays.asList(
+                        MediaType.TEXT_PLAIN,
+                        MediaType.APPLICATION_JSON,
+                        MediaType.APPLICATION_OCTET_STREAM,
+                        MediaType.ALL
+                        ));
         restTemplate.getMessageConverters().add(mappingJackson2HttpMessageConverter);
         return restTemplate;
     }
 
     /**
      * Creates a Game on the server.
-     * @param playerCount Counts number of players.
-     * @return The Game created with its uuid.
+     * @return The uuid of the game created.
      */
-    public static Game createNewGame(int playerCount) {
+    public static String createNewGame() {
         return restTemplate.postForObject(
-                baseUrl + "/new-games/?playerCount=" + playerCount,
-                null, Game.class
-        );
+                baseUrl + "/game",
+                null, String.class
+        ).replaceAll("\"", "");
     }
 
     /**
      * Make one player joining the game. PlayerConnector will store the secret uuid of the player.
-     * @param playerName The player name who want to join the game.
+     * @param gameId Id of the game.
+     * @param isMrJack Whether we play as MrJack or not.
      */
-    public void joinGame(String playerName) {
+    public void joinGame(String gameId,
+                         boolean isMrJack) {
+        PlayerRegistration playerRegistration = new PlayerRegistration(
+                gameId,
+                UUID.randomUUID().toString(),
+                isMrJack
+        );
+
         player = restTemplate.postForObject(
-                baseUrl + "/new-games/" + gameId + "/join/" + playerName,
-                null, Player.class
+                baseUrl + "/register",
+                playerRegistration, PayerSecret.class
         );
     }
 
@@ -68,8 +83,16 @@ public class PlayerConnector {
      */
     public static String getGameStateAsString(String gameId) {
         return restTemplate.getForEntity(
-                baseUrl + "/games/" + gameId,
+                baseUrl + "/game/" + gameId,
                 String.class
+        ).getBody();
+    }
+
+
+    public static JsonNode getGameSecret(String gameId, String secretId) {
+        return restTemplate.getForEntity(
+                baseUrl + "/game/" + gameId + "/secret?secretId=" + secretId,
+                JsonNode.class
         ).getBody();
     }
 
@@ -79,37 +102,28 @@ public class PlayerConnector {
      * @param gameId ID Of the game we want to get.
      * @return State of the game.
      */
-    public static GameState getGameState(String gameId) {
+    public static JsonNode getGameState(String gameId) {
         return restTemplate.getForEntity(
-                baseUrl + "/games/" + gameId,
-                GameState.class
+                baseUrl + "/game/" + gameId,
+                JsonNode.class
         ).getBody();
     }
 
 
     /**
      * The players will play move number "moveNumber".
-     * @param moveNumber Number of the Move.
+     * @param move Number of the Move.
      * @return State of the Game.
      */
-    public GameState playMove(int moveNumber) {
-        System.out.println("Playing Move " + moveNumber + " for player " + player.getUuid());
+    public JsonNode playMove(String move, String gameId) {
+        System.out.println("Playing Move " + move + " for player " + player.getSecretId());
+        MoveRequest moveRequest = new MoveRequest(gameId, move);
         return restTemplate.postForEntity(
-                baseUrl + "/games/" + gameId + "/players/" + player.getUuid() + "/moves/" + moveNumber,
-                null,
-                GameState.class
+                baseUrl + "/playAction?secretId=" + player.getSecretId(),
+                moveRequest,
+                JsonNode.class
         ).getBody();
     }
 
-    /**
-     * Gets Available Moves in the current turn.
-     * @return Moves that the current player can play.
-     */
-    public AvailableMoves getAvailableMove() {
-        return restTemplate.getForEntity(
-                baseUrl + "/games/" + gameId + "/available-moves",
-                AvailableMoves.class
-        ).getBody();
-    }
 
 }
