@@ -1,3 +1,3 @@
-# kingdomino-ia-client
+# Mr Jack Server
 
-Java Client for this server: https://github.com/mratin/kdom
+Java Client for this server: http://mrjack.grooptown.com/
